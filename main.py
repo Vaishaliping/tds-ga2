@@ -65,6 +65,12 @@ async def add_custom_headers(request: Request, call_next):
     return response
 
 
+# ── Root health check ─────────────────────────────────────────────────────────
+@app.get("/")
+def root():
+    return {"status": "ok", "endpoints": ["/stats", "/verify"]}
+
+
 # ── Q1: Stats endpoint ────────────────────────────────────────────────────────
 @app.get("/stats")
 def get_stats(values: str = Query(..., description="Comma-separated integers")):
