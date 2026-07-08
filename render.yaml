@@ -1,7 +1,6 @@
 services:
   - type: web
-    name: tds-ga2-q3
+    name: tds-ga2-cors-metrics
     runtime: python
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORTgit add .
-
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT

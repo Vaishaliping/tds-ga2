@@ -1,67 +1,68 @@
-from fastapi import FastAPI, Query
-from fastapi.middleware.cors import CORSMiddleware
+import time
+import uuid
+from fastapi import FastAPI, Query, Request, Response
+from fastapi.responses import JSONResponse
 from typing import List
+
+EMAIL = "25ds3000064@ds.study.iitm.ac.in"
+ALLOWED_ORIGIN = "https://dash-jyb99d.example.com"
 
 app = FastAPI()
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
-defaults = {
-    "port": 8000,
-    "workers": 1,
-    "debug": False,
-    "log_level": "info",
-    "api_key": "default-secret-000"
-}
+@app.middleware("http")
+async def add_custom_headers(request: Request, call_next):
+    start_time = time.time()
 
-yaml_cfg = {
-    "workers": 6,
-    "log_level": "debug",
-    "api_key": "key-wk7261vvb1"
-}
+    # Handle CORS preflight (OPTIONS) manually for strict per-origin policy
+    origin = request.headers.get("origin", "")
 
-env_file = {
-    "port": 8743,
-    "workers": 3,
-    "log_level": "debug",
-    "api_key": "key-w6pw1siwto"
-}
+    if request.method == "OPTIONS":
+        if origin == ALLOWED_ORIGIN:
+            response = Response(status_code=200)
+            response.headers["Access-Control-Allow-Origin"] = ALLOWED_ORIGIN
+            response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+            response.headers["Access-Control-Allow-Headers"] = "*"
+            response.headers["X-Request-ID"] = str(uuid.uuid4())
+            response.headers["X-Process-Time"] = f"{time.time() - start_time:.6f}"
+            return response
+        else:
+            # Reject preflight from other origins — no ACAO header
+            response = Response(status_code=403)
+            response.headers["X-Request-ID"] = str(uuid.uuid4())
+            response.headers["X-Process-Time"] = f"{time.time() - start_time:.6f}"
+            return response
 
-os_env = {
-    "workers": 8,
-    "debug": False,
-    "log_level": "info",
-    "api_key": "key-xle4yc7j1d"
-}
+    response = await call_next(request)
 
-def convert(v):
-    if isinstance(v, bool):
-        return v
-    s = str(v).lower()
-    if s in ["true","1","yes","on"]:
-        return True
-    if s in ["false","0","no","off"]:
-        return False
-    try:
-        return int(v)
-    except:
-        return v
+    # Add CORS header only for the allowed origin
+    if origin == ALLOWED_ORIGIN:
+        response.headers["Access-Control-Allow-Origin"] = ALLOWED_ORIGIN
+        response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "*"
 
-@app.get("/effective-config")
-def config(set: List[str] = Query(default=[])):
-    cfg = defaults.copy()
-    cfg.update(yaml_cfg)
-    cfg.update(env_file)
-    cfg.update(os_env)
+    # Always add these middleware headers
+    response.headers["X-Request-ID"] = str(uuid.uuid4())
+    process_time = time.time() - start_time
+    response.headers["X-Process-Time"] = f"{process_time:.6f}"
 
-    for item in set:
-        k, v = item.split("=",1)
-        cfg[k] = convert(v)
+    return response
 
-    cfg["api_key"] = "****"
-    return cfg
+
+@app.get("/stats")
+def get_stats(values: str = Query(..., description="Comma-separated integers")):
+    nums = [int(v.strip()) for v in values.split(",") if v.strip()]
+    n = len(nums)
+    total = sum(nums)
+    minimum = min(nums)
+    maximum = max(nums)
+    mean = total / n
+
+    return {
+        "email": EMAIL,
+        "count": n,
+        "sum": total,
+        "min": minimum,
+        "max": maximum,
+        "mean": mean,
+    }
