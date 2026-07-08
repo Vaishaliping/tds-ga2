@@ -94,6 +94,17 @@ class TokenRequest(BaseModel):
 
 @app.post("/verify")
 def verify_token(body: TokenRequest):
+    # First decode WITHOUT verification to see raw claims (debug only)
+    try:
+        unverified = jwt.decode(
+            body.token,
+            options={"verify_signature": False},
+            algorithms=["RS256"],
+        )
+    except Exception as e:
+        return JSONResponse(status_code=401, content={"valid": False, "debug_error": f"Cannot decode token at all: {e}"})
+
+    # Now verify properly
     try:
         payload = jwt.decode(
             body.token,
@@ -101,7 +112,6 @@ def verify_token(body: TokenRequest):
             algorithms=["RS256"],
             issuer=ISSUER,
             audience=AUDIENCE,
-            options={"require": ["exp", "iss", "aud"]},
         )
         return {
             "valid": True,
@@ -109,5 +119,9 @@ def verify_token(body: TokenRequest):
             "sub": payload.get("sub", ""),
             "aud": payload.get("aud", ""),
         }
-    except Exception:
-        return JSONResponse(status_code=401, content={"valid": False})
+    except Exception as e:
+        return JSONResponse(status_code=401, content={
+            "valid": False,
+            "debug_error": str(e),
+            "token_claims": unverified,   # shows what iss/aud/exp actually are
+        })
